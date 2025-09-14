@@ -1,0 +1,54 @@
+{
+  "name": "react-instant",
+  "version": "2.0.0",
+  "description": "A powerful CLI tool to instantly create production-ready Vite + React projects with Tailwind CSS v4.0, Axios, and React Router pre-configured",
+  "main": "bin/cli.js",
+  "bin": {
+    "react-instant": "bin/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepublishOnly": "echo 'Publishing react-instant CLI...'",
+    "postinstall": "echo 'react-instant CLI installed successfully! Run: react-instant'"
+  },
+  "keywords": [
+    "react",
+    "vite",
+    "tailwind",
+    "tailwindcss",
+    "axios",
+    "cli",
+    "starter",
+    "template",
+    "boilerplate",
+    "react-router",
+    "frontend",
+    "javascript",
+    "jsx",
+    "scaffold",
+    "generator"
+  ],
+  "author": "Subhajit Pal <your-email@example.com>",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subhajitpal/react-instant.git"
+  },
+  "bugs": {
+    "url": "https://github.com/subhajitpal/react-instant/issues"
+  },
+  "homepage": "https://github.com/subhajitpal/react-instant#readme",
+  "dependencies": {
+    "fs-extra": "^11.3.1"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ]
+}
