@@ -10,7 +10,52 @@ import readline from 'readline';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Function to get user input for folder name
+// Colors for better CLI experience
+const colors = {
+  green: '\x1b[32m',
+  blue: '\x1b[34m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  cyan: '\x1b[36m',
+  reset: '\x1b[0m',
+  bold: '\x1b[1m'
+};
+
+const log = (message, color = 'reset') => {
+  console.log(`${colors[color]}${message}${colors.reset}`);
+};
+
+// Function to remove extra node_modules directories
+async function removeExtraNodeModules(baseDir) {
+  log('🧹 Cleaning up extra node_modules directories...', 'yellow');
+
+  async function walk(dir) {
+    try {
+      const files = await fs.readdir(dir);
+      for (const file of files) {
+        const fullPath = path.join(dir, file);
+        const stat = await fs.stat(fullPath);
+
+        if (stat.isDirectory()) {
+          // Skip the main node_modules folder
+          if (file === 'node_modules' && path.resolve(fullPath) !== path.resolve(path.join(baseDir, 'node_modules'))) {
+            log(`   Removing: ${fullPath}`, 'red');
+            await fs.remove(fullPath);
+          } else if (file !== 'node_modules' && file !== '.git') {
+            await walk(fullPath);
+          }
+        }
+      }
+    } catch (error) {
+      // Silently skip if directory is not accessible
+    }
+  }
+
+  await walk(baseDir);
+  log('✅ Cleanup completed!', 'green');
+}
+
+// Enhanced user input function
 async function getUserFolder() {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -18,37 +63,87 @@ async function getUserFolder() {
   });
 
   return new Promise((resolve) => {
-    rl.question('📁 Enter folder name for your Vite React project (default: my-vite-app): ', (answer) => {
+    rl.question(`${colors.cyan}📁 Enter folder name for your Vite React project (default: my-vite-app): ${colors.reset}`, (answer) => {
       rl.close();
-      resolve(answer.trim() || 'my-vite-app');
+
+      let folderName = answer.trim() || 'my-vite-app';
+      let counter = 1;
+
+      // Auto-resolve naming conflicts
+      while (fs.existsSync(folderName)) {
+        folderName = `${answer.trim() || 'my-vite-app'}-${counter}`;
+        counter++;
+      }
+
+      if (counter > 1) {
+        log(`⚠️  Folder "${answer.trim() || 'my-vite-app'}" exists. Using "${folderName}" instead.`, 'yellow');
+      }
+
+      resolve(folderName);
     });
   });
 }
 
+// Safe execution with error handling
+function safeExec(command, options = {}) {
+  try {
+    log(`🔄 Running: ${command}`, 'blue');
+    execSync(command, { stdio: 'inherit', ...options });
+    return true;
+  } catch (error) {
+    log(`❌ Error: ${error.message}`, 'red');
+    return false;
+  }
+}
+
+// Speed optimization: Install packages in parallel
+async function optimizedInstall(baseDir) {
+  log('⚡ Installing dependencies with optimization...', 'blue');
+
+  // Use npm ci for faster installation if package-lock.json exists
+  const hasLockFile = await fs.pathExists(path.join(baseDir, 'package-lock.json'));
+
+  if (hasLockFile) {
+    safeExec('npm ci');
+  } else {
+    safeExec('npm install');
+  }
+
+  // Install additional packages in parallel
+  log('📦 Installing additional packages...', 'blue');
+  safeExec('npm install axios react-router-dom tailwindcss @tailwindcss/vite --silent');
+}
+
+// Main function
 async function createViteReactSetup() {
-  // Get user input for folder name
+  console.clear();
+  log('🚀 React Instant CLI v2.0 - Automated Setup', 'cyan');
+  log('======================================\n', 'cyan');
+
+  // Get user input
   const userFolder = await getUserFolder();
   const baseDir = path.resolve(process.cwd(), userFolder);
 
-  console.log(`🚀 Creating Vite React project in folder: ${userFolder}`);
+  log(`\n🚀 Creating Vite React project in folder: ${userFolder}`, 'green');
 
   // Create Vite React project
-  console.log('⚡ Creating Vite project with React template...');
-  execSync(`npm create vite@latest ${userFolder} -- --template react`, { stdio: 'inherit' });
+  log('⚡ Creating Vite project with React template...', 'blue');
+  if (!safeExec(`npm create vite@latest ${userFolder} -- --template react`)) {
+    log('❌ Failed to create Vite project', 'red');
+    process.exit(1);
+  }
 
   // Change to project directory
   process.chdir(baseDir);
 
-  console.log('📦 Installing base dependencies...');
-  execSync('npm install', { stdio: 'inherit' });
+  // Optimized installation
+  await optimizedInstall(baseDir);
 
-  // Install additional dependencies with Tailwind v4.0
-  console.log('📦 Installing Axios, Tailwind CSS v4.0, and additional packages...');
-  execSync('npm install axios react-router-dom', { stdio: 'inherit' });
-  execSync('npm install tailwindcss @tailwindcss/vite', { stdio: 'inherit' });
+  // Remove extra node_modules immediately after installation
+  await removeExtraNodeModules(baseDir);
 
-  // Create standard folder structure
-  console.log('📁 Creating standard folder structure...');
+  // Create folder structure
+  log('📁 Creating optimized folder structure...', 'blue');
   const folders = [
     'src/components/ui',
     'src/components/layout',
@@ -63,58 +158,51 @@ async function createViteReactSetup() {
     'public'
   ];
 
-  folders.forEach(folder => fs.mkdirSync(path.join(baseDir, folder), { recursive: true }));
+  await Promise.all(
+    folders.map(folder => fs.ensureDir(path.join(baseDir, folder)))
+  );
 
-  // Create production-ready index.html
-  console.log('📄 Setting up production-ready index.html...');
-  await fs.writeFile(path.join(baseDir, 'index.html'), `
-<!DOCTYPE html>
+  // Create all files in parallel for speed
+  log('📄 Setting up project files...', 'blue');
+
+  const fileOperations = [
+    // Production-ready index.html
+    fs.writeFile(path.join(baseDir, 'index.html'), `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Primary Meta Tags -->
   <title>%VITE_APP_NAME% | Modern React App</title>
   <meta name="title" content="%VITE_APP_NAME% | Modern React App" />
   <meta name="description" content="A modern React application built with Vite, Tailwind CSS v4.0, and Axios for rapid development" />
   <meta name="keywords" content="react, vite, tailwind, axios, javascript, frontend, webapp" />
   <meta name="author" content="Your Name" />
   <meta name="robots" content="index, follow" />
-  <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://your-domain.com/" />
   <meta property="og:title" content="%VITE_APP_NAME% | Modern React App" />
   <meta property="og:description" content="A modern React application built with Vite, Tailwind CSS v4.0, and Axios for rapid development" />
   <meta property="og:image" content="/og-image.png" />
-  <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:url" content="https://your-domain.com/" />
   <meta property="twitter:title" content="%VITE_APP_NAME% | Modern React App" />
   <meta property="twitter:description" content="A modern React application built with Vite, Tailwind CSS v4.0, and Axios for rapid development" />
   <meta property="twitter:image" content="/twitter-image.png" />
-  <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/png" href="/favicon.png" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <!-- Theme Color -->
   <meta name="theme-color" content="#3b82f6" />
   <meta name="msapplication-TileColor" content="#3b82f6" />
-  <!-- Preconnect to external domains for performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <!-- Security Headers -->
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <meta http-equiv="X-Frame-Options" content="DENY" />
   <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
-  <!-- Performance and Caching -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- PWA Support -->
   <link rel="manifest" href="/manifest.json" />
-  <!-- Critical CSS will be inlined here during build -->
   <style>
-    /* Loading spinner */
     .loading-container {
       position: fixed;
       top: 0;
@@ -127,7 +215,6 @@ async function createViteReactSetup() {
       align-items: center;
       z-index: 9999;
     }
-    
     .loading-spinner {
       width: 40px;
       height: 40px;
@@ -136,28 +223,21 @@ async function createViteReactSetup() {
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
-    
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    
-    /* Hide loading when React loads */
     #root:not(:empty) + .loading-container {
       display: none;
     }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900 antialiased">
-  <!-- App Container -->
   <div id="root"></div>
-  <!-- Loading Fallback -->
   <div class="loading-container">
     <div class="loading-spinner"></div>
   </div>
-  <!-- Module Script -->
   <script type="module" src="/src/main.jsx"></script>
-  <!-- No Script Fallback -->
   <noscript>
     <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
       <h1>JavaScript Required</h1>
@@ -165,13 +245,10 @@ async function createViteReactSetup() {
     </div>
   </noscript>
 </body>
-</html>
-    `.trim());
+</html>`),
 
-  // Create .gitignore file
-  console.log('🔒 Creating .gitignore file...');
-  await fs.writeFile(path.join(baseDir, '.gitignore'), `
-# Logs
+    // .gitignore
+    fs.writeFile(path.join(baseDir, '.gitignore'), `# Logs
 logs
 *.log
 npm-debug.log*
@@ -245,8 +322,6 @@ dist
 
 # Gatsby files
 .cache/
-# Comment in the public line in if your project uses Gatsby and not Next.js
-# https://nextjs.org/blog/next-9-1#public-directory-support
 # public
 
 # Vite build output
@@ -265,19 +340,8 @@ storybook-static
 tmp/
 temp/
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Optional stylelint cache
-.stylelintcache
-
 # SvelteKit build / generate output
 .svelte-kit
-
-# End of https://www.toptal.com/developers/gitignore/api/node
 
 # IDE
 .vscode/
@@ -299,14 +363,12 @@ Thumbs.db
 .netlify
 
 # Vercel
-.vercel
-    `.trim());
+.vercel`),
 
-  // Create PWA manifest.json
-  await fs.writeFile(path.join(baseDir, 'public/manifest.json'), `
-{
+    // PWA manifest.json
+    fs.writeFile(path.join(baseDir, 'public/manifest.json'), `{
   "name": "My Vite React App",
-  "short_name": "ViteApp",
+  "short_name": "ViteApp", 
   "description": "A modern React application built with Vite and Tailwind CSS",
   "start_url": "/",
   "display": "standalone",
@@ -316,7 +378,7 @@ Thumbs.db
   "icons": [
     {
       "src": "/favicon.png",
-      "sizes": "192x192",
+      "sizes": "192x192", 
       "type": "image/png"
     },
     {
@@ -325,13 +387,10 @@ Thumbs.db
       "type": "image/png"
     }
   ]
-}
-    `.trim());
+}`),
 
-  // Update CSS file with Tailwind v4.0 directives
-  console.log('🎨 Setting up Tailwind CSS v4.0...');
-  await fs.writeFile(path.join(baseDir, 'src/index.css'), `
-@import "tailwindcss";
+    // Tailwind CSS setup
+    fs.writeFile(path.join(baseDir, 'src/index.css'), `@import "tailwindcss";
 
 @theme {
   --color-primary-50: #eff6ff;
@@ -358,12 +417,10 @@ Thumbs.db
   .container-custom {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
-}
-    `.trim());
+}`),
 
-  // Clean App.jsx and create new content
-  await fs.writeFile(path.join(baseDir, 'src/App.jsx'), `
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+    // App.jsx
+    fs.writeFile(path.join(baseDir, 'src/App.jsx'), `import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Home from './pages/Home';
 import About from './pages/About';
@@ -381,12 +438,10 @@ function App() {
   );
 }
 
-export default App;
-    `.trim());
+export default App;`),
 
-  // Create Layout component
-  await fs.writeFile(path.join(baseDir, 'src/components/layout/Layout.jsx'), `
-import Header from './Header';
+    // Layout component
+    fs.writeFile(path.join(baseDir, 'src/components/layout/Layout.jsx'), `import Header from './Header';
 import Footer from './Footer';
 
 const Layout = ({ children }) => {
@@ -401,12 +456,10 @@ const Layout = ({ children }) => {
   );
 };
 
-export default Layout;
-    `.trim());
+export default Layout;`),
 
-  // Create Header component
-  await fs.writeFile(path.join(baseDir, 'src/components/layout/Header.jsx'), `
-import { Link } from 'react-router-dom';
+    // Header component  
+    fs.writeFile(path.join(baseDir, 'src/components/layout/Header.jsx'), `import { Link } from 'react-router-dom';
 
 const Header = () => {
   return (
@@ -437,12 +490,10 @@ const Header = () => {
   );
 };
 
-export default Header;
-    `.trim());
+export default Header;`),
 
-  // Create Footer component
-  await fs.writeFile(path.join(baseDir, 'src/components/layout/Footer.jsx'), `
-const Footer = () => {
+    // Footer component
+    fs.writeFile(path.join(baseDir, 'src/components/layout/Footer.jsx'), `const Footer = () => {
   return (
     <footer className="bg-gray-50 border-t">
       <div className="container-custom py-6">
@@ -454,12 +505,10 @@ const Footer = () => {
   );
 };
 
-export default Footer;
-    `.trim());
+export default Footer;`),
 
-  // Create Home page
-  await fs.writeFile(path.join(baseDir, 'src/pages/Home.jsx'), `
-import { useState } from 'react';
+    // Home page
+    fs.writeFile(path.join(baseDir, 'src/pages/Home.jsx'), `import { useState } from 'react';
 import { fetchData } from '../services/api';
 
 const Home = () => {
@@ -508,12 +557,10 @@ const Home = () => {
   );
 };
 
-export default Home;
-    `.trim());
+export default Home;`),
 
-  // Create About page
-  await fs.writeFile(path.join(baseDir, 'src/pages/About.jsx'), `
-const About = () => {
+    // About page
+    fs.writeFile(path.join(baseDir, 'src/pages/About.jsx'), `const About = () => {
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold text-gray-900 mb-6">About</h1>
@@ -541,14 +588,11 @@ const About = () => {
   );
 };
 
-export default About;
-    `.trim());
+export default About;`),
 
-  // Create API service
-  await fs.writeFile(path.join(baseDir, 'src/services/api.js'), `
-import axios from 'axios';
+    // API service
+    fs.writeFile(path.join(baseDir, 'src/services/api.js'), `import axios from 'axios';
 
-// Create axios instance with base configuration
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://jsonplaceholder.typicode.com',
   timeout: 10000,
@@ -557,10 +601,8 @@ const api = axios.create({
   },
 });
 
-// Request interceptor
 api.interceptors.request.use(
   (config) => {
-    // Add auth token if available
     const token = localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = \`Bearer \${token}\`;
@@ -572,7 +614,6 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
@@ -581,7 +622,6 @@ api.interceptors.response.use(
   }
 );
 
-// API functions
 export const fetchData = async () => {
   try {
     const response = await api.get('/posts/1');
@@ -600,13 +640,10 @@ export const postData = async (data) => {
   }
 };
 
-export default api;
-    `.trim());
+export default api;`),
 
-  // Create utility functions
-  await fs.writeFile(path.join(baseDir, 'src/utils/helpers.js'), `
-// Format date
-export const formatDate = (date) => {
+    // Utility functions
+    fs.writeFile(path.join(baseDir, 'src/utils/helpers.js'), `export const formatDate = (date) => {
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
@@ -614,7 +651,6 @@ export const formatDate = (date) => {
   }).format(new Date(date));
 };
 
-// Debounce function
 export const debounce = (func, wait) => {
   let timeout;
   return function executedFunction(...args) {
@@ -627,35 +663,26 @@ export const debounce = (func, wait) => {
   };
 };
 
-// Generate random ID
 export const generateId = () => {
   return Math.random().toString(36).substr(2, 9);
 };
 
-// Capitalize first letter
 export const capitalize = (str) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
-};
-    `.trim());
+};`),
 
-  // Create environment variables file
-  await fs.writeFile(path.join(baseDir, '.env'), `
-VITE_API_BASE_URL=https://jsonplaceholder.typicode.com
+    // Environment variables
+    fs.writeFile(path.join(baseDir, '.env'), `VITE_API_BASE_URL=https://jsonplaceholder.typicode.com
 VITE_APP_NAME=My Vite App
-VITE_APP_VERSION=1.0.0
-    `.trim());
+VITE_APP_VERSION=1.0.0`),
 
-  // Update .env.example
-  await fs.writeFile(path.join(baseDir, '.env.example'), `
-VITE_API_BASE_URL=https://api.example.com
+    // .env.example
+    fs.writeFile(path.join(baseDir, '.env.example'), `VITE_API_BASE_URL=https://api.example.com
 VITE_APP_NAME=My Vite App
-VITE_APP_VERSION=1.0.0
-    `.trim());
+VITE_APP_VERSION=1.0.0`),
 
-  // Create README.md file
-  console.log('📚 Creating README.md file...');
-  await fs.writeFile(path.join(baseDir, 'README.md'), `
-# ${userFolder}
+    // README.md
+    fs.writeFile(path.join(baseDir, 'README.md'), `# ${userFolder}
 
 A modern React application built with **Vite**, **React**, **Tailwind CSS v4.0**, **Axios**, and **React Router**.
 
@@ -683,38 +710,11 @@ npm run lint
 - **Axios** - HTTP client for API calls
 - **React Router** - Client-side routing
 
-## 📁 Project Structure
-
-\`\`\`
-src/
-├── components/
-│   ├── ui/           # Reusable UI components
-│   └── layout/       # Layout components
-├── pages/            # Page components
-├── hooks/            # Custom React hooks
-├── services/         # API services
-├── utils/            # Utility functions
-├── context/          # React context
-├── assets/           # Static assets
-└── styles/           # Additional styles
-\`\`\`
-
 ## 🔧 Configuration
 
 - **Environment Variables**: See \`.env.example\`
 - **Tailwind Config**: \`tailwind.config.js\`
 - **Vite Config**: \`vite.config.js\`
-
-## 🌟 Features
-
-- ✅ Modern React setup with Vite
-- ✅ Tailwind CSS v4.0 with @theme syntax
-- ✅ Pre-configured Axios with interceptors
-- ✅ React Router with layout system
-- ✅ Production-ready build configuration
-- ✅ SEO optimized HTML
-- ✅ PWA ready
-- ✅ TypeScript support ready
 
 ## 🚀 Deployment
 
@@ -727,11 +727,14 @@ The \`dist/\` folder contains the production build ready for deployment.
 
 ## 📄 License
 
-MIT
-    `.trim());
+MIT`)
+  ];
 
-  // Update package.json scripts
-  console.log('🔧 Updating package.json...');
+  // Execute all file operations in parallel
+  await Promise.all(fileOperations);
+
+  // Update package.json
+  log('🔧 Updating package.json...', 'blue');
   const packageJsonPath = path.join(baseDir, 'package.json');
   const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
 
@@ -744,9 +747,8 @@ MIT
 
   await fs.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
 
-  // Update vite.config.js for path resolution and Tailwind v4.0
-  await fs.writeFile(path.join(baseDir, 'vite.config.js'), `
-import { defineConfig } from 'vite'
+  // Update vite.config.js
+  await fs.writeFile(path.join(baseDir, 'vite.config.js'), `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
@@ -778,30 +780,33 @@ export default defineConfig({
       },
     },
   },
-})
-    `.trim());
+})`);
 
-  // Check and update packages (optional)
+  // Final cleanup
+  await removeExtraNodeModules(baseDir);
+
+  // Optional package updates (skip if slow)
   try {
-    console.log('🔄 Checking for package updates...');
-    execSync('npx npm-check-updates -u', { stdio: 'inherit' });
-    execSync('npm install', { stdio: 'inherit' });
+    log('🔄 Updating packages to latest versions...', 'blue');
+    safeExec('npx npm-check-updates -u --silent');
+    safeExec('npm install --silent');
   } catch (error) {
-    console.log('⚠️ Package update check failed, continuing...');
+    log('⚠️  Package update skipped for speed', 'yellow');
   }
 
-  console.log('🚀 Starting development server...');
-  execSync('npm run dev', { stdio: 'inherit' });
+  // Success message
+  log('\n🎉 Setup completed successfully!', 'green');
+  log('===============================', 'green');
+  log(`📁 Project created: ${userFolder}`, 'cyan');
+  log('🚀 Ready to start development!', 'cyan');
 
-  console.log('✅ Vite React project with Tailwind CSS v4.0 setup complete! 🎉');
-  console.log(`\n📁 Project created in: ${userFolder}/`);
-  console.log('\n🚀 To start your server again:');
-  console.log(`   cd ${userFolder}`);
-  console.log('   npm run dev     # Development server');
-  console.log('   npm run build   # Production build');
-  console.log('   npm run preview # Preview production build');
-  console.log('\n📝 Environment variables are in .env file');
-  console.log('🔗 Development server: http://localhost:5173');
+  // Start dev server
+  log('\n🚀 Starting development server...', 'blue');
+  safeExec('npm run dev');
 }
 
-createViteReactSetup().catch(console.error);
+// Run the main function
+createViteReactSetup().catch((error) => {
+  log(`❌ Setup failed: ${error.message}`, 'red');
+  process.exit(1);
+});
