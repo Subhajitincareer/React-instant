@@ -1,4 +1,4 @@
-# React Instant CLI v2.1.3
+# React Instant CLI v2.1.6
 
 A powerful, production-ready Node.js command-line tool for bootstrapping modern React applications with Vite, Tailwind CSS v4.0, Axios, and more—complete with optimized folder structures, parallelized installs, and automatic cleanup.
 
