@@ -25,6 +25,8 @@ const log = (message, color = 'reset') => {
   console.log(`${colors[color]}${message}${colors.reset}`);
 };
 
+
+
 // Function to remove extra node_modules directories
 async function removeExtraNodeModules(baseDir) {
   log('🧹 Cleaning up extra node_modules directories...', 'yellow');
@@ -112,6 +114,35 @@ async function optimizedInstall(baseDir) {
   // Install additional packages in parallel
   log('📦 Installing additional packages...', 'blue');
   safeExec('npm install axios react-router-dom tailwindcss @tailwindcss/vite --silent');
+}
+
+// Check if we're in a temporary working directory
+const hasCliNodeModules = await fs.pathExists(path.join(currentDir, 'node_modules/@subhajitpalv/react-instant'));
+
+if (hasCliNodeModules) {
+  log('🧹 Cleaning CLI temporary files...', 'yellow');
+
+  try {
+    // Remove CLI-related files from working directory
+    const itemsToRemove = [
+      'node_modules',
+      'package.json',
+      'package-lock.json',
+      '.npm'
+    ];
+
+    for (const item of itemsToRemove) {
+      const itemPath = path.join(currentDir, item);
+      if (await fs.pathExists(itemPath)) {
+        await fs.remove(itemPath);
+        log(`   ✅ Removed CLI file: ${item}`, 'green');
+      }
+    }
+
+    log('✅ Working directory cleaned!', 'green');
+  } catch (error) {
+    log('⚠️  Cleanup failed, but project created successfully', 'yellow');
+  }
 }
 
 // Main function
