@@ -25,8 +25,6 @@ const log = (message, color = 'reset') => {
   console.log(`${colors[color]}${message}${colors.reset}`);
 };
 
-
-
 // Function to remove extra node_modules directories
 async function removeExtraNodeModules(baseDir) {
   log('🧹 Cleaning up extra node_modules directories...', 'yellow');
@@ -54,7 +52,53 @@ async function removeExtraNodeModules(baseDir) {
   }
 
   await walk(baseDir);
-  log('✅ Cleanup completed!', 'green');
+  log('✅ Extra node_modules cleanup completed!', 'green');
+}
+
+// Enhanced cleanup function to remove CLI installation files
+async function cleanupCLIFiles(workingDir, projectDir) {
+  log('🧹 Cleaning CLI installation files...', 'yellow');
+
+  try {
+    // Only cleanup if working directory is different from project directory
+    if (path.resolve(workingDir) === path.resolve(projectDir)) {
+      log('   Skipping CLI cleanup (same directory)', 'cyan');
+      return;
+    }
+
+    // Check if CLI files exist in working directory
+    const cliFilesToRemove = [
+      'node_modules',
+      'package.json',
+      'package-lock.json',
+      '.npm',
+      'npm-debug.log',
+      '.npmrc'
+    ];
+
+    let filesRemoved = 0;
+    for (const file of cliFilesToRemove) {
+      const filePath = path.join(workingDir, file);
+      try {
+        if (await fs.pathExists(filePath)) {
+          await fs.remove(filePath);
+          log(`   ✅ Removed CLI file: ${file}`, 'green');
+          filesRemoved++;
+        }
+      } catch (error) {
+        log(`   ⚠️ Could not remove: ${file}`, 'yellow');
+      }
+    }
+
+    if (filesRemoved > 0) {
+      log(`✅ CLI cleanup completed! Removed ${filesRemoved} files.`, 'green');
+    } else {
+      log('✅ No CLI files to cleanup.', 'green');
+    }
+
+  } catch (error) {
+    log('⚠️ CLI cleanup failed, but project created successfully', 'yellow');
+  }
 }
 
 // Enhanced user input function
@@ -116,44 +160,18 @@ async function optimizedInstall(baseDir) {
   safeExec('npm install axios react-router-dom tailwindcss @tailwindcss/vite --silent');
 }
 
-// Check if we're in a temporary working directory
-const hasCliNodeModules = await fs.pathExists(path.join(currentDir, 'node_modules/@subhajitpalv/react-instant'));
-
-if (hasCliNodeModules) {
-  log('🧹 Cleaning CLI temporary files...', 'yellow');
-
-  try {
-    // Remove CLI-related files from working directory
-    const itemsToRemove = [
-      'node_modules',
-      'package.json',
-      'package-lock.json',
-      '.npm'
-    ];
-
-    for (const item of itemsToRemove) {
-      const itemPath = path.join(currentDir, item);
-      if (await fs.pathExists(itemPath)) {
-        await fs.remove(itemPath);
-        log(`   ✅ Removed CLI file: ${item}`, 'green');
-      }
-    }
-
-    log('✅ Working directory cleaned!', 'green');
-  } catch (error) {
-    log('⚠️  Cleanup failed, but project created successfully', 'yellow');
-  }
-}
-
 // Main function
 async function createViteReactSetup() {
+  // Store working directory before changing
+  const originalWorkingDir = process.cwd();
+
   console.clear();
-  log('🚀 React Instant CLI v2.0 - Automated Setup', 'cyan');
-  log('======================================\n', 'cyan');
+  log('🚀 React Instant CLI v2.1.3 - Enhanced Setup', 'cyan');
+  log('=============================================\n', 'cyan');
 
   // Get user input
   const userFolder = await getUserFolder();
-  const baseDir = path.resolve(process.cwd(), userFolder);
+  const baseDir = path.resolve(originalWorkingDir, userFolder);
 
   log(`\n🚀 Creating Vite React project in folder: ${userFolder}`, 'green');
 
@@ -813,8 +831,11 @@ export default defineConfig({
   },
 })`);
 
-  // Final cleanup
+  // Final cleanup - remove extra node_modules from project
   await removeExtraNodeModules(baseDir);
+
+  // **CRITICAL: Clean CLI installation files from original working directory**
+  await cleanupCLIFiles(originalWorkingDir, baseDir);
 
   // Optional package updates (skip if slow)
   try {
@@ -829,6 +850,7 @@ export default defineConfig({
   log('\n🎉 Setup completed successfully!', 'green');
   log('===============================', 'green');
   log(`📁 Project created: ${userFolder}`, 'cyan');
+  log('🧹 Workspace automatically cleaned!', 'cyan');
   log('🚀 Ready to start development!', 'cyan');
 
   // Start dev server
