@@ -1,5 +1,5 @@
 {
-  "name": "react-instant@2.1.2",
+  "name": "react-instant",
   "version": "2.1.2",
   "description": "A powerful CLI tool to instantly create production-ready Vite + React projects with Tailwind CSS v4.0, Axios, and React Router pre-configured",
   "main": "bin/cli.js",
@@ -28,7 +28,7 @@
     "scaffold",
     "generator"
   ],
-  "author": "Subhajit Pal <your-email@example.com>",
+  "author": "Subhajit Pal <subhajitpalv.202@gmail.com>",
   "license": "MIT",
   "type": "module",
   "engines": {
