@@ -1,5 +1,5 @@
 {
-  "name": "react-instant",
+  "name": "@subhajitpalv/react-instant",
   "version": "2.1.2",
   "description": "A powerful CLI tool to instantly create production-ready Vite + React projects with Tailwind CSS v4.0, Axios, and React Router pre-configured",
   "main": "bin/cli.js",
@@ -8,8 +8,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepublishOnly": "echo 'Publishing react-instant CLI...'",
-    "postinstall": "echo 'react-instant CLI installed successfully! Run: react-instant'"
+    "prepublishOnly": "echo 'Publishing @subhajitpalv/react-instant CLI...'",
+    "postinstall": "echo '@subhajitpalv/react-instant CLI installed successfully! Run: react-instant'"
   },
   "keywords": [
     "react",
@@ -26,7 +26,9 @@
     "javascript",
     "jsx",
     "scaffold",
-    "generator"
+    "generator",
+    "instant",
+    "automated"
   ],
   "author": "Subhajit Pal <subhajitpalv.202@gmail.com>",
   "license": "MIT",
@@ -50,5 +52,9 @@
     "bin/",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }
