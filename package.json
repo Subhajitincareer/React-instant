@@ -9,7 +9,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepublishOnly": "echo 'Publishing @subhajitpalv/react-instant CLI...'",
-    "postinstall": "echo '@subhajitpalv/react-instant CLI installed successfully! Run: react-instant'"
+    "postinstall": "echo '@subhajitpalv/react-instant CLI installed successfully! Run: react-instant'",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "keywords": [
     "react",
@@ -44,9 +46,12 @@
   "bugs": {
     "url": "https://github.com/subhajitpal/react-instant/issues"
   },
-  "homepage": "https://github.com/subhajitpal/react-instant#readme",
+  "homepage": "https://subhajitpal.github.io/react-instant/",
   "dependencies": {
     "fs-extra": "^11.3.1"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
   },
   "files": [
     "bin/",
